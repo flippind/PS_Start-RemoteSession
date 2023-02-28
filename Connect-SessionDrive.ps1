@@ -1,3 +1,8 @@
+<#
+    [PARAMS]
+    [string]$redirectDrive
+#>
+
 
 BEGIN {
     CLASS Drive {
@@ -33,11 +38,8 @@ BEGIN {
         }
     }
 
-    $currentDrives = @()
-}
-
-PROCESS {
     #region Get current session letters and paths
+    $currentDrives = @()
     $drivesDotNet = [System.IO.DriveInfo]::GetDrives() | Where-object {$_.DriveType -in ('Network','Fixed')}
     ForEach ($drive in $drivesDotNet) {
         $driveConstruct = @{
@@ -55,14 +57,28 @@ PROCESS {
     }
     #endregion Get current session letters and paths
 
-    
+}
+
+PROCESS {
     # Prompt for current session drive letter
+    if ($redirectDriveName -notin $currentDrives.name) {
+        # Validation in preparation for parameterization
+        [validatescript({
+            if ($_ -match "[a-zA-Z]:\\?") { return $true }
+            else { Throw "Invalid drive letter.  Must resemble 'C:'. "}
+        })]$redirectDrive = Read-Host "Enter drive letter to be mapped to remote session"
+        $redirectDriveName = $redirectDrive.replace('\','') + '\'
+    }   
+    $targetDrive = $currentDrives | Where-Object {$_.name -eq $redirectDriveName}
     
     # Prompt or assume session name
     
+
     # Invoke New-PSDrive to connect drive letter and UNC path
 }
 
 END {
     $currentDrives | Format-Table
+    $redirectDriveName
+    $targetDrive
 }
