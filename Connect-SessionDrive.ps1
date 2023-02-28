@@ -1,6 +1,7 @@
 <#
     [PARAMS]
     [string]$redirectDrive
+    [string]$sessionName = 'viaStart-RemoteSession'
 #>
 
 
@@ -38,7 +39,7 @@ BEGIN {
         }
     }
 
-    #region Get current session letters and paths
+    #region Get currently mapped letters and paths
     $currentDrives = @()
     $drivesDotNet = [System.IO.DriveInfo]::GetDrives() | Where-object {$_.DriveType -in ('Network','Fixed')}
     ForEach ($drive in $drivesDotNet) {
@@ -55,7 +56,21 @@ BEGIN {
         $thisDrive.setNetPath((Get-PSDrive -Name $thisDrive.PSDriveName).DisplayRoot)
         $currentDrives += $thisDrive
     }
-    #endregion Get current session letters and paths
+    #endregion Get currently mapped letters and paths
+
+    #region Discover existing PSSessions
+    [array]$existingSessions = Get-PSSession | Where-Object {$_.state -eq 'Opened'}
+    if (-not $existingSessions) {
+        $message = 'There are no open PSSessions to redirect the drive into'
+        $exception = New-Object InvalidOperationException $message
+        $errorID = 'NullSessions'
+        $errorCategory = [Management.Automation.ErrorCategory]::InvalidOperation
+        $target = 'PSSession'
+        $errorRecord = New-Object Management.Automation.ErrorRecord $exception, $errorID, $errorCategory, $target
+        #$PSCmdlet.ThrowTerminatingError($errorRecord)
+        Throw $errorRecord
+    }
+    #endregion Discover existing PSSessions
 
 }
 
@@ -65,20 +80,26 @@ PROCESS {
         # Validation in preparation for parameterization
         [validatescript({
             if ($_ -match "[a-zA-Z]:\\?") { return $true }
-            else { Throw "Invalid drive letter.  Must resemble 'C:'. "}
+            else { Throw "Invalid drive letter.  RedirectDrive must resemble 'C:'. "}
         })]$redirectDrive = Read-Host "Enter drive letter to be mapped to remote session"
         $redirectDriveName = $redirectDrive.replace('\','') + '\'
     }   
     $targetDrive = $currentDrives | Where-Object {$_.name -eq $redirectDriveName}
     
     # Prompt or assume session name
-    
+    $sessionName = 'viaStart-RemoteSession'                # Test variable assignment for assumed parameter default
+    if ($sessionName -and $sessionName -notIn $existingSessions.name) {
+        $sessionName = Read-host "Please enter the PSSession name to redirect the drive in"
+    }
+    $targetSession = $existingSessions | Where-Object {$_.name -eq $sessionName}
 
     # Invoke New-PSDrive to connect drive letter and UNC path
 }
 
 END {
-    $currentDrives | Format-Table
-    $redirectDriveName
-    $targetDrive
+    #$currentDrives | Format-Table
+    #$redirectDriveName
+    #$targetDrive
+    $existingSessions
+    $targetSession
 }
