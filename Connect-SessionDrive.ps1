@@ -93,13 +93,31 @@ PROCESS {
     }
     $targetSession = $existingSessions | Where-Object {$_.name -eq $sessionName}
 
+    # Verify target drive letter is not in use in remote session
+    $remoteDrives = Invoke-Command -session $targetSession -scriptBlock { Get-PSDrive -psprovider FileSystem }
+    if ($remoteDrives.Root -contains $targetDrive.name) {
+        $message = "Drive $($targetDrive.name) is already in use in session $($targetSession.name)"
+        $exception = New-Object System.Runtime.Remoting.RemotingException $message
+        $errorID = 'DriveInUse'
+        $errorCategory = [Management.Automation.ErrorCategory]::DeviceError
+        $target = $targetDrive.name
+        $errorRecord = New-Object Management.Automation.ErrorRecord $exception, $errorID, $errorCategory, $target
+        #$PSCmdlet.ThrowTerminatingError($errorRecord)
+        Throw $errorRecord
+    }
+
     # Invoke New-PSDrive to connect drive letter and UNC path
+    $result = Invoke-Command -session $targetSession -ScriptBlock {
+        New-PSDrive -Name $using:targetDrive.psDriveName -PsProvider "FileSystem" -Root $using:targetDrive.netPath
+    }
 }
 
 END {
     #$currentDrives | Format-Table
     #$redirectDriveName
     #$targetDrive
-    $existingSessions
-    $targetSession
+    #$existingSessions
+    #$targetSession
+    #$remoteDrives | Format-Table
+    $result
 }
